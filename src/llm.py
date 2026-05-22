@@ -1,12 +1,27 @@
 """LLM 调用封装"""
 
+import os
+
 from openai import OpenAI
 
 
-def load_prompt(path="prompt.md"):
-    """读取 prompt 文件，按 ======== 分割为 system prompt 和 user prompt 模板"""
+def load_prompt(path="prompts/warm.md"):
+    """读取 prompt 文件，自动合并 base.md
+
+    人设文件（如 warm.md）只包含人设部分，
+    base.md 包含通用回复要求 + ======== + user template。
+    合并后按 ======== 分割为 system prompt 和 user prompt 模板。
+    """
     with open(path, "r", encoding="utf-8") as f:
-        content = f.read().strip()
+        persona = f.read().strip()
+
+    # 加载 base.md（和人设文件同目录）
+    base_path = os.path.join(os.path.dirname(path), "base.md")
+    with open(base_path, "r", encoding="utf-8") as f:
+        base = f.read().strip()
+
+    # 合并：人设 + 空行 + base
+    content = f"{persona}\n\n{base}"
 
     if "========" in content:
         parts = content.split("========", 1)
@@ -25,9 +40,15 @@ def generate_comment(config, prompt, post_content):
 
     system_prompt, user_template = prompt
 
+    # 内容过长时截断并提示省流
+    content = post_content.get("content", "")
+    max_content_len = config.get("max_content_len", 500)
+    if len(content) > max_content_len:
+        content = content[:max_content_len] + "\n\n（内容过长已截断，请根据以上部分回复）"
+
     # 替换占位符，构造 user message content
     user_text = user_template.replace("{{title}}", post_content.get("title", ""))
-    user_text = user_text.replace("{{content}}", post_content.get("content", ""))
+    user_text = user_text.replace("{{content}}", content)
 
     # 处理图片
     imgs = post_content.get("imgs", [])
