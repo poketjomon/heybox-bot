@@ -33,6 +33,10 @@ def fetch_at_messages(session, config, limit=20):
 
     messages = []
     for msg in data.get("result", {}).get("messages", []):
+        # 跳过缺少关键字段的消息
+        if "linkid" not in msg or "comment_a_id" not in msg:
+            continue
+
         # 清理 comment_a_text 中的 HTML 标签，提取纯文本
         raw_text = msg.get("comment_a_text", "")
         clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
@@ -70,11 +74,12 @@ def main():
     messages = fetch_at_messages(session, config)
     print(f"获取到 {len(messages)} 条@消息")
 
-    # 过滤已回复的 + 只回复最近2天的
+    # 过滤已回复的 + 只回复最近 max_age_hours 内的
     replied_ids = {r["message_id"] for r in read_jsonl(AT_FILE) if "message_id" in r}
-    cutoff = (datetime.now() - timedelta(days=2)).timestamp()
+    max_age_hours = config.get("bot", {}).get("max_age_hours", 24)
+    cutoff = (datetime.now() - timedelta(hours=max_age_hours)).timestamp()
     pending = [m for m in messages if m["message_id"] not in replied_ids and m["timestamp"] >= cutoff]
-    print(f"已回复 {len(messages) - len(pending)} 条，待回复 {len(pending)} 条（仅最近2天）")
+    print(f"已回复 {len(messages) - len(pending)} 条，待回复 {len(pending)} 条（仅最近{max_age_hours}小时）")
 
     if not pending:
         print("没有待回复的@消息，退出")

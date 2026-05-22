@@ -34,11 +34,15 @@ def append_jsonl(path, record):
 
 
 def update_record(path, link_id, updates):
-    """更新指定 link_id 的记录，合并 updates 字段"""
+    """更新指定 link_id 的记录，合并 updates 字段。值为 None 时删除该字段"""
     records = read_jsonl(path)
     for r in records:
         if r.get("link_id") == link_id:
-            r.update(updates)
+            for k, v in updates.items():
+                if v is None:
+                    r.pop(k, None)
+                else:
+                    r[k] = v
             break
     write_jsonl(path, records)
 

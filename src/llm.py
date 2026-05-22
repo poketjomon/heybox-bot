@@ -40,15 +40,18 @@ def generate_comment(config, prompt, post_content):
 
     system_prompt, user_template = prompt
 
-    # 内容过长时截断并提示省流
+    # 内容过长时要求先省流再评论
     content = post_content.get("content", "")
     max_content_len = config.get("max_content_len", 500)
     if len(content) > max_content_len:
-        content = content[:max_content_len] + "\n\n（内容过长已截断，请根据以上部分回复）"
+        summary_hint = "\n\n（这篇内容较长，请先用一句话省流总结，然后换行写你的评论。格式：省流：xxx\\n你的评论）"
+    else:
+        summary_hint = ""
 
     # 替换占位符，构造 user message content
     user_text = user_template.replace("{{title}}", post_content.get("title", ""))
     user_text = user_text.replace("{{content}}", content)
+    user_text += summary_hint
 
     # 处理图片
     imgs = post_content.get("imgs", [])
@@ -87,4 +90,7 @@ def generate_comment(config, prompt, post_content):
     if usage:
         print(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
-    return response.choices[0].message.content.strip()
+    result = response.choices[0].message.content.strip()
+    # 去掉 LLM 可能加的首尾引号
+    result = result.strip('""\u201c\u201d\u2018\u2019\'')
+    return result

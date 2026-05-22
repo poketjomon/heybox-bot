@@ -1,5 +1,8 @@
 """小黑盒帖子抓取（通过 API）"""
 
+import json
+import re
+
 import requests
 
 from src.sign import generate_sign
@@ -59,19 +62,41 @@ def _base_params(config, url_path):
 
 def fetch_post_detail(session, config, link_id):
     """获取单个帖子详情，返回 {title, content, imgs}"""
-    url = "https://api.xiaoheihe.cn/bbs/app/link/info"
-    params = _base_params(config, "/bbs/app/link/info")
+    url = "https://api.xiaoheihe.cn/bbs/app/link/tree"
+    params = _base_params(config, "/bbs/app/link/tree")
     params["link_id"] = str(link_id)
+    params["is_first"] = "1"
+    params["page"] = "1"
+    params["limit"] = "1"
 
     resp = session.get(url, params=params)
     resp.raise_for_status()
     data = resp.json()
 
-    link_info = data.get("result", {}).get("link_info", {})
+    link = data.get("result", {}).get("link", {})
+
+    # text 字段是 JSON 数组格式的富文本，需要解析提取纯文本
+    text_raw = link.get("text", "")
+    content = ""
+    if text_raw:
+        try:
+            text_list = json.loads(text_raw)
+            parts = []
+            for block in text_list:
+                t = block.get("text", "")
+                clean = re.sub(r"<[^>]+>", "", t).strip()
+                if clean:
+                    parts.append(clean)
+            content = "\n".join(parts)
+        except (json.JSONDecodeError, TypeError):
+            content = ""
+
+    if not content:
+        content = link.get("description", "")
+
     return {
-        "title": link_info.get("title", ""),
-        "content": link_info.get("description", ""),
-        "imgs": link_info.get("imgs", []),
+        "title": link.get("title", ""),
+        "content": content,
     }
 
 
