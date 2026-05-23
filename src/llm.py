@@ -91,6 +91,8 @@ def generate_comment(config, prompt, post_content):
         print(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
     result = response.choices[0].message.content.strip()
-    # 去掉 LLM 可能加的首尾引号
-    result = result.strip('""\u201c\u201d\u2018\u2019\'')
+    # 去掉所有双引号（中英文），替换为空格
+    result = result.replace('"', " ").replace("\u201c", " ").replace("\u201d", " ")
+    # 清理多余空格
+    result = " ".join(result.split())
     return result

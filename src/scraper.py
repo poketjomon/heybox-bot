@@ -100,6 +100,36 @@ def fetch_post_detail(session, config, link_id):
     }
 
 
+def fetch_top_comments(session, config, link_id, limit=6):
+    """获取帖子热门评论（按点赞排序），返回 [{text, up, username}, ...]"""
+    url = "https://api.xiaoheihe.cn/bbs/app/link/tree"
+    params = _base_params(config, "/bbs/app/link/tree")
+    params["link_id"] = str(link_id)
+    params["is_first"] = "1"
+    params["page"] = "1"
+    params["limit"] = str(limit)
+
+    resp = session.get(url, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+
+    results = []
+    for floor in data.get("result", {}).get("comments", []):
+        for c in floor.get("comment", []):
+            text = re.sub(r"<[^>]+>", "", c.get("text", "")).strip()
+            if text:
+                results.append({
+                    "text": text,
+                    "up": c.get("up", 0),
+                    "username": c.get("user", {}).get("username", ""),
+                })
+            break  # 只取每层楼主评论
+
+    # 按点赞排序取前 limit 条
+    results.sort(key=lambda x: x["up"], reverse=True)
+    return results[:limit]
+
+
 def fetch_post_links(session, config, topic_id="7214", limit=10, sort_filter="new"):
     """从话题 API 获取帖子列表
 

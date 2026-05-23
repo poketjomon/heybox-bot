@@ -15,7 +15,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 POSTS_SENT_FILE = os.path.join(DATA_DIR, "posts_sent.jsonl")
 
 
-def create_post(session, config, title, content, topic_ids="7214", hashtags=None):
+def create_post(session, config, title, content, topic_ids="7214", hashtags=None, use_html=False):
     """发布帖子到小黑盒
 
     Args:
@@ -23,11 +23,14 @@ def create_post(session, config, title, content, topic_ids="7214", hashtags=None
         content: 帖子正文
         topic_ids: 发布到的话题ID，逗号分隔多个
         hashtags: 标签列表，如 ["bot", "日常"]
+        use_html: 是否使用 HTML 富文本格式（支持 <a> 链接等）
     """
     url = "https://api.xiaoheihe.cn/bbs/app/api/link/post"
     params = _base_params(config, "/bbs/app/api/link/post")
 
-    text_payload = json.dumps([{"text": content, "type": "text"}], ensure_ascii=False)
+    content_type = "html" if use_html else "text"
+    link_tag = "1" if use_html else "27"
+    text_payload = json.dumps([{"text": content, "type": content_type}], ensure_ascii=False)
 
     data = {
         "text": text_payload,
@@ -35,7 +38,7 @@ def create_post(session, config, title, content, topic_ids="7214", hashtags=None
         "desc": "",
         "post_type": "1",
         "view_limit": "1",
-        "link_tag": "27",
+        "link_tag": link_tag,
         "post_card_ids": "",
         "topic_ids": topic_ids,
         "hashtags": json.dumps(hashtags or [], ensure_ascii=False),
@@ -57,29 +60,15 @@ def generate_post(config, prompt_path, topic=None):
     # 加载人设 prompt（只用 system 部分）
     system_prompt, _ = load_prompt(prompt_path)
 
+    # 加载发帖 prompt
+    post_prompt_path = os.path.join(os.path.dirname(prompt_path), "post.md")
+    with open(post_prompt_path, "r", encoding="utf-8") as f:
+        post_prompt = f.read().strip()
+
     if topic:
-        user_text = (
-            f"请你以自己的身份发一个帖子，主题是：{topic}\n\n"
-            "要求：\n"
-            "- 输出格式：第一行是标题，第二行是标签（用逗号分隔，2-4个），空一行后是正文\n"
-            "- 标题：简短有吸引力，不超过20字\n"
-            "- 标签：和内容相关的关键词，如 动漫,游戏,日常\n"
-            "- 正文：200-500字，像在社区里和朋友聊天一样自然\n"
-            "- 保持你的人设和语气\n"
-            "- 不要用引号包裹输出"
-        )
+        user_text = f"请你以自己的身份发一个帖子，主题是：{topic}\n\n{post_prompt}"
     else:
-        user_text = (
-            "请你以自己的身份发一个帖子，分享你最近的想法、体验或安利。\n\n"
-            "要求：\n"
-            "- 输出格式：第一行是标题，第二行是标签（用逗号分隔，2-4个），空一行后是正文\n"
-            "- 标题：简短有吸引力，不超过20字\n"
-            "- 标签：和内容相关的关键词，如 动漫,游戏,日常\n"
-            "- 正文：200-500字，像在社区里和朋友聊天一样自然\n"
-            "- 内容可以是：游戏体验、番剧推荐、日常吐槽、梗图讨论等\n"
-            "- 保持你的人设和语气\n"
-            "- 不要用引号包裹输出"
-        )
+        user_text = post_prompt
 
     response = client.chat.completions.create(
         model=llm_config["model"],
@@ -96,25 +85,29 @@ def generate_post(config, prompt_path, topic=None):
         print(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
     result = response.choices[0].message.content.strip()
-    result = result.strip('""\u201c\u201d\u2018\u2019\'')
+    result = result.replace('"', " ").replace("\u201c", " ").replace("\u201d", " ")
 
     # 解析标题、标签和正文
     lines = result.split("\n")
     title = lines[0].strip().lstrip("#").strip()
 
-    # 第二行是标签
+    # 跳过空行找标签行
     tags = []
     content_start = 1
-    if len(lines) > 1:
-        tag_line = lines[1].strip()
+    for i in range(1, min(len(lines), 5)):
+        line = lines[i].strip()
+        if not line:
+            continue
         # 去掉可能的前缀如 "标签：" "tags:"
         for prefix in ["标签：", "标签:", "tags:", "Tags:"]:
-            if tag_line.startswith(prefix):
-                tag_line = tag_line[len(prefix):].strip()
+            if line.startswith(prefix):
+                line = line[len(prefix):].strip()
                 break
-        if tag_line and not tag_line.startswith(("大家", "我", "最近", "今天")):
-            tags = [t.strip().strip("#") for t in tag_line.replace("，", ",").split(",") if t.strip()]
-            content_start = 2
+        # 判断是否是标签行：短、逗号分隔、不像正文开头
+        if (line and "," in line or "，" in line) and len(line) < 50 and not line.startswith(("大家", "我", "最近", "今天")):
+            tags = [t.strip().strip("#") for t in line.replace("，", ",").split(",") if t.strip()]
+            content_start = i + 1
+        break
 
     content = "\n".join(lines[content_start:]).strip()
 
