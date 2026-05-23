@@ -410,6 +410,8 @@ def do_daily_news(session, config, prompt_path, dry_run=False):
     system_prompt, _ = load_prompt(prompt_path)
 
     news_prompt_path = os.path.join(os.path.dirname(prompt_path), "news.md")
+    if not os.path.exists(news_prompt_path):
+        news_prompt_path = os.path.join(os.path.dirname(os.path.dirname(prompt_path)), "news.md")
     with open(news_prompt_path, "r", encoding="utf-8") as f:
         news_prompt = f.read().strip()
 
@@ -445,7 +447,7 @@ def do_daily_news(session, config, prompt_path, dry_run=False):
         log(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
     result = response.choices[0].message.content.strip()
-    result = result.replace('"', " ").replace("\u201c", " ").replace("\u201d", " ")
+    result = result.replace('"', "").replace("\u201c", "").replace("\u201d", "")
 
     # 正文就是 LLM 的完整输出（不再解析标题）
     content = result.strip()
@@ -607,10 +609,11 @@ def reply_to_post(session, config, prompt, post, dry_run=False):
                 # 屏蔽词导致的失败，清掉缓存让下次重新生成
                 log("[回复帖子] 检测到屏蔽词，将重新生成")
                 update_record(POSTS_FILE, link_id, {"pending_comment": None})
+                return "blocked"
             else:
                 # 其他失败（网络等），保存已生成的评论下次重发
                 update_record(POSTS_FILE, link_id, {"pending_comment": comment})
-            return
+                return "failed"
 
     update_record(POSTS_FILE, link_id, {
         "comment": comment,
@@ -723,7 +726,7 @@ def reply_to_at(session, config, prompt, msg, dry_run=False):
         print(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
     comment = response.choices[0].message.content.strip()
-    comment = comment.replace('"', " ").replace("\u201c", " ").replace("\u201d", " ")
+    comment = comment.replace('"', "").replace("\u201c", "").replace("\u201d", "")
     comment = " ".join(comment.split())
     log(f"[回复@] 生成: {comment}")
 
@@ -901,7 +904,7 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
         print(f"  [token] input={usage.prompt_tokens}, output={usage.completion_tokens}, total={usage.total_tokens}")
 
     comment = response.choices[0].message.content.strip()
-    comment = comment.replace('"', " ").replace("\u201c", " ").replace("\u201d", " ")
+    comment = comment.replace('"', "").replace("\u201c", "").replace("\u201d", "")
     comment = " ".join(comment.split())
     log(f"[回复评论] 生成: {comment}")
 
@@ -1043,12 +1046,18 @@ def reply_loop(session, config, prompt, dry_run=False):
                         interruptible_sleep(cooldown)
 
             try:
-                reply_to_post(session, config, prompt, post, dry_run)
-                replied_count += 1
+                result = reply_to_post(session, config, prompt, post, dry_run)
+                if result == "blocked":
+                    log(f"[冷却] 屏蔽词重试，等待 10 秒...")
+                    interruptible_sleep(10)
+                else:
+                    replied_count += 1
+                    log(f"[冷却] 等待 {cooldown} 秒...")
+                    interruptible_sleep(cooldown)
             except Exception as e:
                 log(f"[回复帖子] 出错: {e}")
-            log(f"[冷却] 等待 {cooldown} 秒...")
-            interruptible_sleep(cooldown)
+                log(f"[冷却] 等待 {cooldown} 秒...")
+                interruptible_sleep(cooldown)
             post_count += 1
 
         log(f"[回复] 本轮完成，共回复 {replied_count} 条")

@@ -46,14 +46,14 @@ def generate_comment(config, prompt, post_content):
     content = post_content.get("content", "")
     max_content_len = config.get("max_content_len", 500)
     if len(content) > max_content_len:
-        summary_hint = "\n\n（这篇内容较长，请先用一句话省流总结，然后换行写你的评论。格式：省流：xxx\\n你的评论）"
+        summary_hint = "（这篇内容较长，请先用一句话省流总结，然后换行写你的评论。格式：省流：xxx\n你的评论）"
     else:
         summary_hint = ""
 
     # 替换占位符，构造 user message content
     user_text = user_template.replace("{{title}}", post_content.get("title", ""))
     user_text = user_text.replace("{{content}}", content)
-    user_text += summary_hint
+    user_text = user_text.replace("{{summary_hint}}", summary_hint)
 
     # 处理图片
     imgs = post_content.get("imgs", [])

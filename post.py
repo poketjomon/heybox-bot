@@ -60,8 +60,10 @@ def generate_post(config, prompt_path, topic=None):
     # 加载人设 prompt（只用 system 部分）
     system_prompt, _ = load_prompt(prompt_path)
 
-    # 加载发帖 prompt
+    # 加载发帖 prompt（先找同目录，找不到就往上一级找）
     post_prompt_path = os.path.join(os.path.dirname(prompt_path), "post.md")
+    if not os.path.exists(post_prompt_path):
+        post_prompt_path = os.path.join(os.path.dirname(os.path.dirname(prompt_path)), "post.md")
     with open(post_prompt_path, "r", encoding="utf-8") as f:
         post_prompt = f.read().strip()
 
