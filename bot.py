@@ -702,15 +702,21 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
     comment_text = msg["comment_text"]
     switched_role = None
 
-    # 用正则匹配"转xx"
+    # 用白名单构造正则，精确匹配"转+角色名"
     import re as _re
-    role_match = _re.search(r"转([\u4e00-\u9fffa-zA-Z]{1,4})", comment_text)
-    if role_match:
-        candidate = role_match.group(1)
-        if candidate in role_whitelist:
-            switched_role = candidate
+    switched_role = None
+    if role_whitelist:
+        # 按长度降序排列，优先匹配长的（如"假面骑士"优先于"假面"）
+        sorted_roles = sorted(role_whitelist, key=len, reverse=True)
+        pattern = r"转(" + "|".join(_re.escape(r) for r in sorted_roles) + r")"
+        role_match = _re.search(pattern, comment_text)
+        if role_match:
+            switched_role = role_match.group(1)
         else:
-            log(f"[角色切换] 不在白名单，忽略: 转{candidate}")
+            # 检查是否有"转xx"意图但不在白名单
+            general_match = _re.search(r"转([\u4e00-\u9fffa-zA-Z]{1,6})", comment_text)
+            if general_match:
+                log(f"[角色切换] 不在白名单，忽略: 转{general_match.group(1)}")
 
     # 如果本次检测到了新的角色切换，记录下来
     if switched_role:
@@ -744,8 +750,13 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
                 persona_text = f.read().strip()
             log(f"[角色切换] 使用角色文件: {persona_path}")
         else:
-            # 白名单里有但文件不存在，用简单模板兜底
-            persona_text = f"你现在扮演「{switched_role}」这个角色。用符合这个角色身份的语气、口癖和性格来回复。回复要简短自然，不超过30字。"
+            # 白名单里有但文件不存在，用 _fallback.md 兜底
+            fallback_path = os.path.join(role_switch_dir, "_fallback.md")
+            if os.path.exists(fallback_path):
+                with open(fallback_path, "r", encoding="utf-8") as f:
+                    persona_text = f.read().strip().replace("{{role_name}}", switched_role)
+            else:
+                persona_text = f"你现在扮演「{switched_role}」这个角色。用符合这个角色身份的语气、口癖和性格来回复。回复要简短自然，不超过30字。"
             log(f"[角色切换] 文件缺失，使用兜底模板: {switched_role}")
         # 拼上 base.md（表情包 + 回复模板）
         base_path = os.path.join("prompts", "base.md")
