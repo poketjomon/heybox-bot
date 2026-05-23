@@ -22,6 +22,7 @@ REPLY_FILE = os.path.join(DATA_DIR, "reply_messages.jsonl")
 POSTS_SENT_FILE = os.path.join(DATA_DIR, "posts_sent.jsonl")
 HOT_POSTS_FILE = os.path.join(DATA_DIR, "hot_posts.jsonl")
 NEWS_SENT_FILE = os.path.join(DATA_DIR, "news_sent.jsonl")
+ROLE_SWITCH_FILE = os.path.join(DATA_DIR, "role_switches.jsonl")
 
 running = True
 
@@ -695,6 +696,69 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
     """回复一条'回复我的评论'"""
     log(f"[回复评论] 来自 {msg['user_a']} - {msg['comment_text'][:40]}")
 
+    # 检测"转xx"角色切换
+    role_switch_dir = config.get("role_switch_dir", "prompts/persona")
+    role_whitelist = config.get("role_whitelist", [])
+    comment_text = msg["comment_text"]
+    switched_role = None
+
+    # 用正则匹配"转xx"
+    import re as _re
+    role_match = _re.search(r"转([\u4e00-\u9fffa-zA-Z]{1,4})", comment_text)
+    if role_match:
+        candidate = role_match.group(1)
+        if candidate in role_whitelist:
+            switched_role = candidate
+        else:
+            log(f"[角色切换] 不在白名单，忽略: 转{candidate}")
+
+    # 如果本次检测到了新的角色切换，记录下来
+    if switched_role:
+        role_records = [r for r in read_jsonl(ROLE_SWITCH_FILE)
+                        if r.get("link_id") == msg["link_id"]
+                        and r.get("user") == msg["user_a"]]
+        last_role = role_records[-1].get("role") if role_records else None
+        if switched_role != last_role:
+            append_jsonl(ROLE_SWITCH_FILE, {
+                "link_id": msg["link_id"],
+                "user": msg["user_a"],
+                "role": switched_role,
+                "switched_at": now_iso(),
+            })
+            log(f"[角色切换] 用户 {msg['user_a']} 触发: 转{switched_role}")
+
+    # 查找当前用户是否有角色切换记录（包括刚记录的）
+    if not switched_role:
+        role_records = [r for r in read_jsonl(ROLE_SWITCH_FILE)
+                        if r.get("link_id") == msg["link_id"]
+                        and r.get("user") == msg["user_a"]]
+        if role_records:
+            switched_role = role_records[-1].get("role")
+
+    # 确定使用的 system_prompt
+    if switched_role:
+        # 从 prompts/persona/xx.md 读取人设
+        persona_path = os.path.join(role_switch_dir, f"{switched_role}.md")
+        if os.path.exists(persona_path):
+            with open(persona_path, "r", encoding="utf-8") as f:
+                persona_text = f.read().strip()
+            log(f"[角色切换] 使用角色文件: {persona_path}")
+        else:
+            # 白名单里有但文件不存在，用简单模板兜底
+            persona_text = f"你现在扮演「{switched_role}」这个角色。用符合这个角色身份的语气、口癖和性格来回复。回复要简短自然，不超过30字。"
+            log(f"[角色切换] 文件缺失，使用兜底模板: {switched_role}")
+        # 拼上 base.md（表情包 + 回复模板）
+        base_path = os.path.join("prompts", "base.md")
+        with open(base_path, "r", encoding="utf-8") as f:
+            base_text = f.read().strip()
+        combined = f"{persona_text}\n\n{base_text}"
+        if "========" in combined:
+            system_prompt = combined.split("========", 1)[0].strip()
+        else:
+            system_prompt = combined
+    else:
+        system_prompt = prompt[0]
+
     # 获取帖子详情作为上下文
     try:
         post_detail = fetch_post_detail(session, config, msg["link_id"])
@@ -718,8 +782,7 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
             history_lines.append(f"我：{r['reply']}")
         history_text = "\n".join(history_lines)
 
-    # 单独构造回复评论的 prompt，不走通用 template
-    system_prompt = prompt[0]
+    # 构造回复评论的 user prompt
 
     if history_text:
         user_text = (

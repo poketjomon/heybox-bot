@@ -15,8 +15,10 @@ def load_prompt(path="prompts/warm.md"):
     with open(path, "r", encoding="utf-8") as f:
         persona = f.read().strip()
 
-    # 加载 base.md（和人设文件同目录）
+    # 加载 base.md（先找同目录，找不到就往上一级找）
     base_path = os.path.join(os.path.dirname(path), "base.md")
+    if not os.path.exists(base_path):
+        base_path = os.path.join(os.path.dirname(os.path.dirname(path)), "base.md")
     with open(base_path, "r", encoding="utf-8") as f:
         base = f.read().strip()
 
