@@ -233,7 +233,7 @@ def reply_loop(session, config, prompt, dry_run=False):
 
 # ─── 入口 ────────────────────────────────────────────────────
 
-def manual_post(config, session, prompt_path, subject, topic, hashtags, dry_run):
+def manual_post(config, session, prompt_path, subject, title, content, topic, hashtags, dry_run):
     """手动发帖模式：生成内容并发送，完成后退出"""
     from src.poster import create_post, generate_post
     from src.storage import append_jsonl, now_iso
@@ -245,10 +245,17 @@ def manual_post(config, session, prompt_path, subject, topic, hashtags, dry_run)
         log(f"[发帖] 主题: {subject}")
     log("")
 
-    log("[发帖] 正在生成...")
-    title, content, auto_tags = generate_post(config, prompt_path, topic=subject)
-    if not hashtags and auto_tags:
-        hashtags = auto_tags
+    # 如果指定了 title + content，跳过 LLM 生成
+    if title and content:
+        log(f"[发帖] 使用手动指定内容")
+    else:
+        log("[发帖] 正在生成...")
+        title_gen, content_gen, auto_tags = generate_post(config, prompt_path, topic=subject)
+        title = title or title_gen
+        content = content or content_gen
+        if not hashtags and auto_tags:
+            hashtags = auto_tags
+
     log(f"[发帖] 标题: {title}")
     log(f"[发帖] 标签: {hashtags or '无'}")
     log(f"[发帖] 正文 ({len(content)} 字):")
@@ -287,6 +294,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="试运行，不实际发送")
     parser.add_argument("--post", action="store_true", help="手动发帖模式，发完即退出")
     parser.add_argument("--subject", default=None, help="发帖主题，如 '自我介绍'")
+    parser.add_argument("--title", default=None, help="直接指定帖子标题（跳过LLM生成）")
+    parser.add_argument("--content", default=None, help="直接指定帖子正文（跳过LLM生成）")
     parser.add_argument("--topic", default=None, help="话题ID，默认读 config 中的 post_topic_id")
     parser.add_argument("--hashtags", default="", help="标签，逗号分隔，如 'bot,日常'")
     args = parser.parse_args()
@@ -332,7 +341,7 @@ def main():
     if args.post:
         topic = args.topic or config.get("bot", {}).get("post_topic_id", "7214")
         hashtags = [h.strip() for h in args.hashtags.split(",") if h.strip()] if args.hashtags else []
-        manual_post(config, session, prompt_path, args.subject, topic, hashtags, args.dry_run)
+        manual_post(config, session, prompt_path, args.subject, args.title, args.content, topic, hashtags, args.dry_run)
         return
 
     prompt = load_prompt(prompt_path)

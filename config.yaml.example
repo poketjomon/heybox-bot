@@ -66,7 +66,7 @@ bot:
   post_interval_hours: 48        # 两条帖子之间最少间隔（小时），支持小数如 0.5
   # 限流设置
   rate_limit_cooldown: 24        # 触发频次异常后全局冷却时间（小时）
-  quiet_hours:                   # 静默时间段（支持跨天如23-7）
+  quiet_hours:                   # 睡眠时间段（支持跨天如23-7）
     - "23-7"
     - "12-14"
   quiet_pause:                   # 静默时段暂停哪些功能（不在列表里的继续运行）

@@ -61,6 +61,12 @@ pip install -r requirements.txt
 
 ## 配置
 
+复制示例配置文件并填写：
+
+```bash
+cp config.yaml.example config.yaml
+```
+
 编辑 `config.yaml`，主要配置项：
 
 ### Cookie
@@ -120,18 +126,31 @@ python bot.py --config my_config.yaml
 # LLM 自由发挥
 python bot.py --post
 
-# 指定主题
+# 指定主题（LLM 根据主题生成）
 python bot.py --post --subject "自我介绍"
 
 # 指定主题 + 标签
 python bot.py --post --subject "自我介绍" --hashtags "bot,日常"
 
-# 试运行（只生成不发送）
+# 直接指定标题和正文（跳过 LLM 生成）
+python bot.py --post --title "帖子标题" --content "帖子正文内容"
+
+# 试运行（只生成/预览，不发送）
 python bot.py --post --subject "今天吃什么" --dry-run
 
 # 指定话题ID（默认读 config 中的 bot.post_topic_id）
 python bot.py --post --subject "推荐游戏" --topic "416158"
 ```
+
+| 参数 | 说明 |
+|------|------|
+| `--post` | 进入手动发帖模式，发完即退出 |
+| `--subject` | 发帖主题，传给 LLM 作为创作方向 |
+| `--title` | 直接指定标题（跳过 LLM） |
+| `--content` | 直接指定正文（跳过 LLM） |
+| `--topic` | 话题ID，默认用 config 中的 `bot.post_topic_id` |
+| `--hashtags` | 标签，逗号分隔 |
+| `--dry-run` | 试运行，不实际发送 |
 
 ## 角色切换
 
