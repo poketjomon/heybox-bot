@@ -40,8 +40,8 @@ heybox-bot/
 │   ├── post.md             # 发帖 prompt
 │   ├── news.md             # 新闻 prompt
 │   └── persona/            # 角色人设文件
-│       ├── 宅女.md
-│       ├── 暖男.md
+│       ├── 奶龙.md
+│       ├── 男娘.md
 │       └── ...
 └── data/                   # 运行时数据（JSONL）
     ├── posts.jsonl
