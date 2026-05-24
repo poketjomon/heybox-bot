@@ -44,13 +44,15 @@ def fetch_loop(session, config, prompt_path, dry_run=False):
             if not bot_utils.running:
                 break
 
-            # 优先级2：抓取回复评论
+        # 优先级2：抓取回复评论
+        if not is_in_quiet_hours(config, "fetch"):
             do_fetch_replies(session, config)
             interruptible_sleep(fetch_cooldown)
             if not bot_utils.running:
                 break
 
-            # 优先级3：抓取新帖子
+        # 优先级3：抓取新帖子
+        if not is_in_quiet_hours(config, "fetch"):
             do_fetch_posts(session, config)
             interruptible_sleep(fetch_cooldown)
             if not bot_utils.running:
