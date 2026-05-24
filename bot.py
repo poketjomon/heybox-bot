@@ -152,6 +152,9 @@ def reply_loop(session, config, prompt, dry_run=False):
                 return
             if is_rate_limited():
                 break
+            if is_in_quiet_hours(config, "reply"):
+                log("[静默] 进入静默时间段，停止回复")
+                break
             try:
                 reply_to_at(session, config, prompt, msg, dry_run)
                 replied_count += 1
@@ -165,6 +168,9 @@ def reply_loop(session, config, prompt, dry_run=False):
             if not bot_utils.running:
                 return
             if is_rate_limited():
+                break
+            if is_in_quiet_hours(config, "reply"):
+                log("[静默] 进入静默时间段，停止回复")
                 break
             try:
                 reply_to_reply(session, config, prompt, msg, dry_run)
@@ -181,6 +187,9 @@ def reply_loop(session, config, prompt, dry_run=False):
             if not bot_utils.running:
                 return
             if is_rate_limited():
+                break
+            if is_in_quiet_hours(config, "reply"):
+                log("[静默] 进入静默时间段，停止回复")
                 break
             # 每回复 check_every 条帖子，检查是否有新的@或回复评论
             if post_count > 0 and post_count % check_every == 0:
