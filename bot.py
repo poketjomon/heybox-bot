@@ -25,10 +25,57 @@ NEWS_SENT_FILE = os.path.join(DATA_DIR, "news_sent.jsonl")
 ROLE_SWITCH_FILE = os.path.join(DATA_DIR, "role_switches.jsonl")
 
 running = True
+rate_limit_until = None  # 全局冷却截止时间
 
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+
+def is_in_quiet_hours(config, action="reply"):
+    """检查当前是否在静默时间段内，且该功能被暂停
+    action: reply / fetch / hot_posts / post / news
+    """
+    bot_config = config.get("bot", {})
+    quiet_hours = bot_config.get("quiet_hours", [])
+    if not quiet_hours:
+        return False
+    quiet_pause = bot_config.get("quiet_pause", ["reply", "fetch", "hot_posts", "post", "news"])
+    if action not in quiet_pause:
+        return False
+    now_hour = datetime.now().hour
+    for period in quiet_hours:
+        parts = str(period).split("-")
+        if len(parts) != 2:
+            continue
+        start, end = int(parts[0]), int(parts[1])
+        if start > end:
+            # 跨天，如 23-7 表示 23:00~次日7:00
+            if now_hour >= start or now_hour < end:
+                return True
+        else:
+            if start <= now_hour < end:
+                return True
+    return False
+
+
+def is_rate_limited():
+    """检查是否在全局冷却中"""
+    global rate_limit_until
+    if rate_limit_until and datetime.now() < rate_limit_until:
+        return True
+    if rate_limit_until and datetime.now() >= rate_limit_until:
+        rate_limit_until = None
+        log("[全局冷却] 冷却结束，恢复运行")
+    return False
+
+
+def trigger_rate_limit(config):
+    """触发全局冷却"""
+    global rate_limit_until
+    hours = config.get("bot", {}).get("rate_limit_cooldown", 24)
+    rate_limit_until = datetime.now() + timedelta(hours=hours)
+    log(f"[全局冷却] 触发频次限制，冷却 {hours} 小时，恢复时间: {rate_limit_until.strftime('%m-%d %H:%M')}")
 
 
 def interruptible_sleep(seconds):
@@ -539,38 +586,47 @@ def fetch_loop(session, config, prompt_path, dry_run=False):
     fetch_cooldown = bot_config.get("fetch_cooldown", 10)
 
     while running:
-        # 优先级1：抓取@消息
-        do_fetch_at(session, config)
-        interruptible_sleep(fetch_cooldown)
-        if not running:
-            break
+        # 全局冷却时全部暂停
+        if is_rate_limited():
+            interruptible_sleep(60)
+            continue
 
-        # 优先级2：抓取回复评论
-        do_fetch_replies(session, config)
-        interruptible_sleep(fetch_cooldown)
-        if not running:
-            break
+        # 优先级1：抓取@消息（属于 fetch）
+        if not is_in_quiet_hours(config, "fetch"):
+            do_fetch_at(session, config)
+            interruptible_sleep(fetch_cooldown)
+            if not running:
+                break
 
-        # 优先级3：抓取新帖子
-        do_fetch_posts(session, config)
-        interruptible_sleep(fetch_cooldown)
-        if not running:
-            break
+            # 优先级2：抓取回复评论
+            do_fetch_replies(session, config)
+            interruptible_sleep(fetch_cooldown)
+            if not running:
+                break
+
+            # 优先级3：抓取新帖子
+            do_fetch_posts(session, config)
+            interruptible_sleep(fetch_cooldown)
+            if not running:
+                break
 
         # 自动发帖（检查是否到时间）
-        do_auto_post(session, config, prompt_path, dry_run)
-        interruptible_sleep(fetch_cooldown)
-        if not running:
-            break
+        if not is_in_quiet_hours(config, "post"):
+            do_auto_post(session, config, prompt_path, dry_run)
+            interruptible_sleep(fetch_cooldown)
+            if not running:
+                break
 
         # 抓取热门帖子
-        do_fetch_hot_posts(session, config)
-        interruptible_sleep(fetch_cooldown)
-        if not running:
-            break
+        if not is_in_quiet_hours(config, "hot_posts"):
+            do_fetch_hot_posts(session, config)
+            interruptible_sleep(fetch_cooldown)
+            if not running:
+                break
 
         # 每日新闻（检查是否到发布时间）
-        do_daily_news(session, config, prompt_path, dry_run)
+        if not is_in_quiet_hours(config, "news"):
+            do_daily_news(session, config, prompt_path, dry_run)
 
         # 等待下一轮
         log(f"[抓取] 下一轮抓取在 {fetch_interval} 秒后")
@@ -605,7 +661,10 @@ def reply_to_post(session, config, prompt, post, dry_run=False):
         else:
             msg_text = result.get("msg") or str(result)
             log(f"[回复帖子] 发送失败: {msg_text}")
-            if "屏蔽" in msg_text or "违规" in msg_text:
+            if "频次" in msg_text or "频率" in msg_text:
+                trigger_rate_limit(config)
+                return "rate_limited"
+            elif "屏蔽" in msg_text or "违规" in msg_text:
                 # 屏蔽词导致的失败，清掉缓存让下次重新生成
                 log("[回复帖子] 检测到屏蔽词，将重新生成")
                 update_record(POSTS_FILE, link_id, {"pending_comment": None})
@@ -741,7 +800,10 @@ def reply_to_at(session, config, prompt, msg, dry_run=False):
         if result.get("status") == "ok":
             log(f"[回复@] 发送成功 (commentid={result.get('commentid')})")
         else:
-            log(f"[回复@] 发送失败: {result.get('msg') or result}")
+            msg_text = result.get("msg") or str(result)
+            log(f"[回复@] 发送失败: {msg_text}")
+            if "频次" in msg_text or "频率" in msg_text:
+                trigger_rate_limit(config)
             return  # 发送失败不标记，下次重试
 
     append_jsonl(AT_FILE, {
@@ -919,7 +981,10 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
         if result.get("status") == "ok":
             log(f"[回复评论] 发送成功 (commentid={result.get('commentid')})")
         else:
-            log(f"[回复评论] 发送失败: {result.get('msg') or result}")
+            msg_text = result.get("msg") or str(result)
+            log(f"[回复评论] 发送失败: {msg_text}")
+            if "频次" in msg_text or "频率" in msg_text:
+                trigger_rate_limit(config)
             return  # 发送失败不标记，下次重试
 
     append_jsonl(REPLY_FILE, {
@@ -940,6 +1005,19 @@ def reply_loop(session, config, prompt, dry_run=False):
     cooldown = bot_config.get("reply_cooldown", 180)
 
     while running:
+        # 检查全局冷却
+        if is_rate_limited():
+            remaining = (rate_limit_until - datetime.now()).total_seconds()
+            log(f"[全局冷却] 冷却中，剩余 {int(remaining // 3600)}h{int((remaining % 3600) // 60)}m")
+            interruptible_sleep(60)
+            continue
+
+        # 检查静默时间段
+        if is_in_quiet_hours(config, "reply"):
+            log("[静默] 当前处于静默时间段，暂停操作")
+            interruptible_sleep(60)
+            continue
+
         # 1. 获取待回复的@消息
         replied_at_ids = {r["message_id"] for r in read_jsonl(AT_FILE) if "message_id" in r}
         try:
@@ -982,6 +1060,8 @@ def reply_loop(session, config, prompt, dry_run=False):
         for msg in pending_at:
             if not running:
                 return
+            if is_rate_limited():
+                break
             try:
                 reply_to_at(session, config, prompt, msg, dry_run)
                 replied_count += 1
@@ -994,6 +1074,8 @@ def reply_loop(session, config, prompt, dry_run=False):
         for msg in pending_replies:
             if not running:
                 return
+            if is_rate_limited():
+                break
             try:
                 reply_to_reply(session, config, prompt, msg, dry_run)
                 replied_count += 1
@@ -1008,6 +1090,8 @@ def reply_loop(session, config, prompt, dry_run=False):
         for post in pending_posts:
             if not running:
                 return
+            if is_rate_limited():
+                break
             # 每回复 check_every 条帖子，检查是否有新的@或回复评论
             if post_count > 0 and post_count % check_every == 0:
                 try:
@@ -1050,6 +1134,8 @@ def reply_loop(session, config, prompt, dry_run=False):
                 if result == "blocked":
                     log(f"[冷却] 屏蔽词重试，等待 10 秒...")
                     interruptible_sleep(10)
+                elif result == "rate_limited":
+                    break  # 触发频次限制，跳出回到主循环检查
                 else:
                     replied_count += 1
                     log(f"[冷却] 等待 {cooldown} 秒...")
@@ -1100,6 +1186,10 @@ def main():
         news_hours = hot_config.get("news_hours", [hot_config.get("news_hour", 10)])
         hours_str = "、".join(f"{h}:00" for h in news_hours)
         log(f"  每日新闻: 开启 (每天 {hours_str} 发布)")
+    quiet_hours = bot_config.get("quiet_hours", [])
+    if quiet_hours:
+        log(f"  静默时段: {', '.join(str(h) for h in quiet_hours)}")
+    log(f"  频次冷却: {bot_config.get('rate_limit_cooldown', 24)}h")
     if args.dry_run:
         log("  模式: DRY RUN（不实际发送）")
     log("=" * 50)

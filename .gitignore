@@ -5,3 +5,4 @@ data/
 *.pyc
 .trash/
 logs/
+*__pycache__/
