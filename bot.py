@@ -233,11 +233,62 @@ def reply_loop(session, config, prompt, dry_run=False):
 
 # ─── 入口 ────────────────────────────────────────────────────
 
+def manual_post(config, session, prompt_path, subject, topic, hashtags, dry_run):
+    """手动发帖模式：生成内容并发送，完成后退出"""
+    from src.poster import create_post, generate_post
+    from src.storage import append_jsonl, now_iso
+    from src.core.utils import POSTS_SENT_FILE
+
+    log(f"[发帖] 人设: {prompt_path}")
+    log(f"[发帖] 话题ID: {topic}")
+    if subject:
+        log(f"[发帖] 主题: {subject}")
+    log("")
+
+    log("[发帖] 正在生成...")
+    title, content, auto_tags = generate_post(config, prompt_path, topic=subject)
+    if not hashtags and auto_tags:
+        hashtags = auto_tags
+    log(f"[发帖] 标题: {title}")
+    log(f"[发帖] 标签: {hashtags or '无'}")
+    log(f"[发帖] 正文 ({len(content)} 字):")
+    print(content)
+    print()
+
+    if dry_run:
+        log("[发帖] DRY RUN，未发送")
+        append_jsonl(POSTS_SENT_FILE, {
+            "title": title, "content": content, "topic_id": topic,
+            "hashtags": hashtags, "status": "dry_run", "posted_at": now_iso(),
+        })
+        return
+
+    result = create_post(session, config, title, content, topic_ids=topic, hashtags=hashtags)
+    if result.get("status") == "ok":
+        log(f"[发帖] 发送成功! link_id={result.get('link_id')}")
+        append_jsonl(POSTS_SENT_FILE, {
+            "link_id": str(result.get("link_id", "")),
+            "title": title, "content": content, "topic_id": topic,
+            "hashtags": hashtags, "status": "success", "posted_at": now_iso(),
+        })
+    else:
+        log(f"[发帖] 发送失败: {result.get('msg') or result}")
+        append_jsonl(POSTS_SENT_FILE, {
+            "title": title, "content": content, "topic_id": topic,
+            "hashtags": hashtags, "status": "failed",
+            "error": result.get("msg") or str(result), "posted_at": now_iso(),
+        })
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="小黑盒 Bot 自动运行")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--dry-run", action="store_true", help="试运行，不实际发送")
+    parser.add_argument("--post", action="store_true", help="手动发帖模式，发完即退出")
+    parser.add_argument("--subject", default=None, help="发帖主题，如 '自我介绍'")
+    parser.add_argument("--topic", default=None, help="话题ID，默认读 config 中的 post_topic_id")
+    parser.add_argument("--hashtags", default="", help="标签，逗号分隔，如 'bot,日常'")
     args = parser.parse_args()
 
     with open(args.config, "r", encoding="utf-8") as f:
@@ -275,8 +326,16 @@ def main():
         log(f"[配置] 自动生成 device_id: {config['device_id']}")
 
     prompt_path = config.get("prompt_file", "prompts/warm.md")
-    prompt = load_prompt(prompt_path)
     session = get_session(config)
+
+    # 手动发帖模式
+    if args.post:
+        topic = args.topic or config.get("bot", {}).get("post_topic_id", "7214")
+        hashtags = [h.strip() for h in args.hashtags.split(",") if h.strip()] if args.hashtags else []
+        manual_post(config, session, prompt_path, args.subject, topic, hashtags, args.dry_run)
+        return
+
+    prompt = load_prompt(prompt_path)
 
     bot_config = config.get("bot", {})
     log("=" * 50)

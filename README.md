@@ -114,6 +114,25 @@ python bot.py --dry-run
 python bot.py --config my_config.yaml
 ```
 
+### 手动发帖
+
+```bash
+# LLM 自由发挥
+python bot.py --post
+
+# 指定主题
+python bot.py --post --subject "自我介绍"
+
+# 指定主题 + 标签
+python bot.py --post --subject "自我介绍" --hashtags "bot,日常"
+
+# 试运行（只生成不发送）
+python bot.py --post --subject "今天吃什么" --dry-run
+
+# 指定话题ID（默认读 config 中的 bot.post_topic_id）
+python bot.py --post --subject "推荐游戏" --topic "416158"
+```
+
 ## 角色切换
 
 用户在评论中说"转xx"即可触发角色切换（需在 `role_whitelist` 白名单中）。角色人设文件放在 `prompts/persona/` 目录下。
