@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta
 
-from src.llm import load_prompt
+from src.llm import load_prompt, llm_chat
 from src.storage import read_jsonl, append_jsonl, now_iso
 from src.poster import create_post
 
@@ -116,8 +116,8 @@ def do_daily_news(session, config, prompt_path, dry_run=False):
 
     log(f"[新闻] 正在生成每日快讯（{len(top_posts)} 条素材）...")
     try:
-        response = client.chat.completions.create(
-            model=llm_config["model"],
+        response = llm_chat(
+            client, llm_config["model"],
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_text},

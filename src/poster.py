@@ -6,7 +6,7 @@ import os
 from openai import OpenAI
 
 from src.scraper import _base_params
-from src.llm import load_prompt
+from src.llm import load_prompt, llm_chat
 from src.storage import append_jsonl, now_iso
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -70,8 +70,8 @@ def generate_post(config, prompt_path, topic=None):
     else:
         user_text = post_prompt
 
-    response = client.chat.completions.create(
-        model=llm_config["model"],
+    response = llm_chat(
+        client, llm_config["model"],
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},

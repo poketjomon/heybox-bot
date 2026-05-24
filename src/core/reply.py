@@ -3,7 +3,7 @@
 import os
 
 from src.commenter import post_comment, post_comment_reply
-from src.llm import generate_comment
+from src.llm import generate_comment, llm_chat
 from src.scraper import fetch_post_detail
 from src.storage import read_jsonl, append_jsonl, update_record, now_iso
 
@@ -146,8 +146,8 @@ def reply_to_at(session, config, prompt, msg, dry_run=False):
     llm_config = config["llm"]
     client = OpenAI(base_url=llm_config["base_url"], api_key=llm_config["api_key"])
 
-    response = client.chat.completions.create(
-        model=llm_config["model"],
+    response = llm_chat(
+        client, llm_config["model"],
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},
@@ -326,8 +326,8 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
     llm_config = config["llm"]
     client = OpenAI(base_url=llm_config["base_url"], api_key=llm_config["api_key"])
 
-    response = client.chat.completions.create(
-        model=llm_config["model"],
+    response = llm_chat(
+        client, llm_config["model"],
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},

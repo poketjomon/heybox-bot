@@ -1,6 +1,7 @@
 """LLM 调用封装"""
 
 import os
+import time
 
 from openai import OpenAI
 
@@ -30,6 +31,27 @@ def load_prompt(path="prompts/warm.md"):
         return parts[0].strip(), parts[1].strip()
     else:
         return content, "标题：{{title}}\n\n内容：{{content}}"
+
+
+def llm_chat(client, model, messages, max_tokens=200, temperature=0.8):
+    """带重试的 LLM 调用，失败自动重试3次"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 5 * (attempt + 1)
+                print(f"  [LLM] 第{attempt+1}次请求失败: {e}，{wait}秒后重试...")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def generate_comment(config, prompt, post_content):
@@ -78,8 +100,8 @@ def generate_comment(config, prompt, post_content):
         user_content.append({"type": "text", "text": user_text})
         user_content.extend(img_blocks)
 
-    response = client.chat.completions.create(
-        model=llm_config["model"],
+    response = llm_chat(
+        client, llm_config["model"],
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
