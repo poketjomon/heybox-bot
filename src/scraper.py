@@ -160,3 +160,39 @@ def fetch_post_links(session, config, topic_id="7214", limit=10, sort_filter="ne
             "comment_num": link.get("comment_num", 0),
         })
     return posts
+
+
+def fetch_at_messages(session, config, limit=20):
+    """获取@我的消息列表"""
+    url = "https://api.xiaoheihe.cn/bbs/app/user/message"
+    params = _base_params(config, "/bbs/app/user/message")
+    params.update({
+        "message_type": "16",
+        "offset": "0",
+        "limit": str(limit),
+    })
+
+    resp = session.get(url, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+
+    messages = []
+    for msg in data.get("result", {}).get("messages", []):
+        if "linkid" not in msg or "comment_a_id" not in msg:
+            continue
+
+        raw_text = msg.get("comment_a_text", "")
+        clean_text = re.sub(r"<[^>]+>", "", raw_text).strip()
+
+        messages.append({
+            "message_id": str(msg["message_id"]),
+            "link_id": str(msg["linkid"]),
+            "link_title": msg.get("link_title", ""),
+            "comment_a_id": str(msg["comment_a_id"]),
+            "root_comment_id": str(msg["root_comment_id"]),
+            "comment_text": clean_text,
+            "user_a": msg.get("user_a", {}).get("username", ""),
+            "userid_a": str(msg.get("userid_a", "")),
+            "timestamp": float(msg.get("timestamp", 0)),
+        })
+    return messages

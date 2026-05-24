@@ -1,17 +1,15 @@
-"""小黑盒 Bot — LLM 生成内容并发帖"""
+"""小黑盒发帖功能"""
 
-import argparse
 import json
 import os
 
-import yaml
 from openai import OpenAI
 
-from src.scraper import get_session, _base_params
+from src.scraper import _base_params
 from src.llm import load_prompt
 from src.storage import append_jsonl, now_iso
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 POSTS_SENT_FILE = os.path.join(DATA_DIR, "posts_sent.jsonl")
 
 
@@ -100,12 +98,10 @@ def generate_post(config, prompt_path, topic=None):
         line = lines[i].strip()
         if not line:
             continue
-        # 去掉可能的前缀如 "标签：" "tags:"
         for prefix in ["标签：", "标签:", "tags:", "Tags:"]:
             if line.startswith(prefix):
                 line = line[len(prefix):].strip()
                 break
-        # 判断是否是标签行：短、逗号分隔、不像正文开头
         if (line and "," in line or "，" in line) and len(line) < 50 and not line.startswith(("大家", "我", "最近", "今天")):
             tags = [t.strip().strip("#") for t in line.replace("，", ",").split(",") if t.strip()]
             content_start = i + 1
@@ -114,78 +110,3 @@ def generate_post(config, prompt_path, topic=None):
     content = "\n".join(lines[content_start:]).strip()
 
     return title, content, tags
-
-
-def main():
-    parser = argparse.ArgumentParser(description="小黑盒 Bot 发帖")
-    parser.add_argument("--config", default="config.yaml", help="配置文件路径")
-    parser.add_argument("--prompt", default=None, help="人设文件路径，默认读 config.yaml 中的 prompt_file")
-    parser.add_argument("--topic", default="7214", help="话题ID，默认盒友杂谈")
-    parser.add_argument("--subject", default=None, help="指定发帖主题，如 '自我介绍'")
-    parser.add_argument("--hashtags", default="", help="标签，逗号分隔，如 'bot,日常'")
-    parser.add_argument("--dry-run", action="store_true", help="试运行，只生成不发送")
-    args = parser.parse_args()
-
-    with open(args.config, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    prompt_path = args.prompt or config.get("prompt_file", "prompts/warm.md")
-    hashtags = [h.strip() for h in args.hashtags.split(",") if h.strip()] if args.hashtags else []
-
-    print(f"[发帖] 人设: {prompt_path}")
-    print(f"[发帖] 话题: {args.topic}")
-    print()
-
-    # 生成内容
-    print("[发帖] 正在生成...")
-    title, content, auto_tags = generate_post(config, prompt_path, topic=args.subject)
-    # 命令行标签优先，没有则用 LLM 生成的
-    if not hashtags and auto_tags:
-        hashtags = auto_tags
-    print(f"[发帖] 标题: {title}")
-    print(f"[发帖] 标签: {hashtags or '无'}")
-    print(f"[发帖] 正文 ({len(content)} 字):")
-    print(content)
-    print()
-
-    if args.dry_run:
-        print("[发帖] DRY RUN，未发送")
-        append_jsonl(POSTS_SENT_FILE, {
-            "title": title,
-            "content": content,
-            "topic_id": args.topic,
-            "hashtags": hashtags,
-            "status": "dry_run",
-            "posted_at": now_iso(),
-        })
-        return
-
-    # 发送
-    session = get_session(config)
-    result = create_post(session, config, title, content, topic_ids=args.topic, hashtags=hashtags)
-    if result.get("status") == "ok":
-        print(f"[发帖] 发送成功! link_id={result.get('link_id')}")
-        append_jsonl(POSTS_SENT_FILE, {
-            "link_id": str(result.get("link_id", "")),
-            "title": title,
-            "content": content,
-            "topic_id": args.topic,
-            "hashtags": hashtags,
-            "status": "success",
-            "posted_at": now_iso(),
-        })
-    else:
-        print(f"[发帖] 发送失败: {result.get('msg') or result}")
-        append_jsonl(POSTS_SENT_FILE, {
-            "title": title,
-            "content": content,
-            "topic_id": args.topic,
-            "hashtags": hashtags,
-            "status": "failed",
-            "error": result.get("msg") or str(result),
-            "posted_at": now_iso(),
-        })
-
-
-if __name__ == "__main__":
-    main()
