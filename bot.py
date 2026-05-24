@@ -256,6 +256,24 @@ def main():
             config["heybox_id"] = cookie_dict["heybox_id"]
         log(f"[配置] 从 cookie/cookie.json 加载 cookie ({len(cookie_dict)} 项)")
 
+    # device_id: 没有或为空则自动生成并写回 config.yaml
+    import hashlib, random, string
+    if not config.get("device_id"):
+        config["device_id"] = hashlib.md5(
+            "".join(random.choices(string.ascii_letters + string.digits, k=32)).encode()
+        ).hexdigest()
+        # 写回 config.yaml
+        with open(args.config, "r", encoding="utf-8") as f:
+            raw = f.read()
+        if "device_id:" in raw:
+            import re
+            raw = re.sub(r'device_id:\s*".*"', f'device_id: "{config["device_id"]}"', raw)
+        else:
+            raw += f'\ndevice_id: "{config["device_id"]}"\n'
+        with open(args.config, "w", encoding="utf-8") as f:
+            f.write(raw)
+        log(f"[配置] 自动生成 device_id: {config['device_id']}")
+
     prompt_path = config.get("prompt_file", "prompts/warm.md")
     prompt = load_prompt(prompt_path)
     session = get_session(config)

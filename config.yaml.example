@@ -1,0 +1,110 @@
+# Cookie 配置（二选一）：
+# 方式1（推荐）：登录后，将浏览器导出的 cookie 放到 cookie/cookie.json，启动时自动读取全部字段
+# 方式2：登录后，查看cookie，在下方手动填写（如果 cookie.json 存在则忽略此处）
+cookie: # cookie必填
+  user_pkey: ""              # 必填，登录凭证
+  user_heybox_id: ""         # 必填，用户ID
+  heybox_id: ""              # 必填，同 user_heybox_id 一致
+  x_xhh_tokenid: ""         # 必填，token
+
+# LLM 配置（OpenAI 兼容格式）
+llm:
+  base_url: "https://www.xxx.xxx/v1" # 必填，接口地址,v1结尾
+  api_key: "sk-xxx"                # 必填，API Key
+  model: "gpt-5.4-mini"           # 必填，模型名称，如 gpt-5.4-mini，qwen3.5等
+
+# device_id 可选，不填则自动生成
+device_id: ""
+
+
+
+# Prompt 文件路径（可选：prompts/persona/暖男.md, 毒舌.md, 佛系.md, 宅女.md, 游戏女.md）
+prompt_file: "prompts/persona/宅女.md"
+
+# 抓取设置
+topic_ids:                       # 话题ID列表，会依次抓取
+  - "7214"                       # 盒友杂谈
+  # - "1"                        # PC游戏
+  # - "425422"                   # steam
+  - "416158"                     # 情投一盒
+  # - "73907"                      # 沙雕日常
+fetch_limit: 30          # 每个话题每次抓取帖子数量
+max_comment_num: 50      # 只抓取评论数少于此值的帖子
+max_imgs: 6              # 只抓取图片数不超过此值的帖子
+sort_filter: "new"       # 排序方式：new=最新, 不填=热门
+
+
+# 热门帖子抓取 & 每日新闻（话题复用上面的 topic_ids）
+hot_posts:
+  enabled: true
+  fetch_limit: 20                # 每个话题抓取数量
+  min_comment_num: 200            # 评论数至少多少才算热门
+  top_comments: 6                # 每个帖子抓取前几条热评
+  news_enabled: true             # 是否开启每日新闻发帖
+  news_hours: [7,21]            # 每天几点发新闻（支持多个时间点）
+  news_topic_id: "7214"          # 新闻发到哪个话题
+  news_max_items: 30             # 新闻最多包含几条帖子
+
+
+# 单独文件运行设置，bot.py不适用
+# max_comments: 5          # 未使用，每次最多评论几个帖子
+# delay_seconds: 60        # 未使用，每条评论之间的间隔（秒），避免太快被风控
+vision_imgs: 6           # 传给模型看的图片数量（0=不看图）
+summary_enabled: true    # 是否开启长文省流功能（false=关闭，直接评论不省流）
+max_content_len: 150     # 开启省流功能后，帖子内容超过此字数时，触发省流功能
+
+# Bot 自动运行设置（python bot.py）
+bot:
+  fetch_interval: 200            # 每轮抓取的间隔（秒），一轮 = 依次抓取@/回复/帖子
+  fetch_cooldown: 200            # 每次抓取请求之间的冷却（秒），防止请求太快
+  reply_cooldown: 500            # 每条回复之间的冷却时间（秒），不管哪种回复都共用
+  max_age_hours: 24              # 只回复最近多少小时内的内容（帖子、@、评论）
+  reply_history_rounds: 20       # 回复评论时聚合的最大对话轮数
+  check_priority_every: 3        # 每回复几条帖子就检查一次@和评论（优先处理）
+  # 自动发帖设置
+  post_enabled: true             # 是否开启自动发提问帖
+  post_interval_hours: 48        # 两条帖子之间最少间隔（小时），支持小数如 0.5
+  # 限流设置
+  rate_limit_cooldown: 24        # 触发频次异常后全局冷却时间（小时）
+  quiet_hours:                   # 静默时间段（支持跨天如23-7）
+    - "23-7"
+    - "12-14"
+  quiet_pause:                   # 静默时段暂停哪些功能（不在列表里的继续运行）
+    - "reply"                    # 回复（@、评论、帖子）
+    - "fetch"                  # 抓取可回复帖子
+    # - "hot_posts"              # 抓取热门帖子
+    # - "post"                   # 自动发帖
+    # - "news"                   # 每日新闻
+  post_topic_id: "7214"          # 自动发帖的话题ID
+
+# "转xx"角色切换
+# 预设角色放在 prompts/persona/ 下，文件名对应角色名（如 人工.md、人妻.md）
+# 用户说"转xx"时，只有白名单内的角色才能切换，其他忽略用默认人设回复
+role_switch_dir: "prompts/persona"
+role_whitelist:                   # 允许切换的角色名（只有这些才生效）
+  - "人妻"
+  - "人工"
+  - "萝莉"
+  - "傲娇"
+  - "耄耋"
+  - "奶龙"
+  - "暖男"
+  - "毒舌"
+  - "佛系"
+  - "宅女"
+  - "游戏女"
+  - "猫娘"
+  - "女仆"
+  - "大小姐"
+  - "病娇"
+  - "奥特曼"
+  - "假面骑士"
+  - "魔法少女"
+  - "海贼王"
+  - "火影"
+  - "智障"
+  - "人夫"
+  - "女装大佬"
+  - "男娘"
+  - "哈基米"
+

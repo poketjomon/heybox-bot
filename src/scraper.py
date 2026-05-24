@@ -1,7 +1,10 @@
 """小黑盒帖子抓取（通过 API）"""
 
+import hashlib
 import json
+import random
 import re
+import string
 
 import requests
 
@@ -42,6 +45,20 @@ def _generate_nonce():
 def _base_params(config, url_path):
     """构造通用请求参数（自动生成签名）"""
     sign = generate_sign(url_path)
+    # device_id: 如果没配置则随机生成一个 32 位 hex
+    device_id = config.get("device_id")
+    if not device_id:
+        device_id = hashlib.md5(
+            "".join(random.choices(string.ascii_letters + string.digits, k=32)).encode()
+        ).hexdigest()
+        config["device_id"] = device_id
+    # heybox_id: 优先顶层配置，其次从 cookie 中取
+    heybox_id = config.get("heybox_id")
+    if not heybox_id:
+        cookie = config.get("cookie", {})
+        if isinstance(cookie, dict):
+            heybox_id = cookie.get("heybox_id") or cookie.get("user_heybox_id", "")
+        config["heybox_id"] = heybox_id
     return {
         "os_type": "web",
         "app": "heybox",
@@ -50,10 +67,10 @@ def _base_params(config, url_path):
         "web_version": "2.5",
         "x_client_type": "web",
         "x_app": "heybox_website",
-        "heybox_id": config["heybox_id"],
+        "heybox_id": heybox_id,
         "x_os_type": "Mac",
         "device_info": "Chrome",
-        "device_id": config["device_id"],
+        "device_id": device_id,
         "hkey": sign["hkey"],
         "_time": sign["_time"],
         "nonce": sign["nonce"],
