@@ -61,6 +61,7 @@ bot:
   max_age_hours: 24              # 只回复最近多少小时内的内容（帖子、@、评论）
   reply_history_rounds: 20       # 回复评论时聚合的最大对话轮数
   check_priority_every: 3        # 每回复几条帖子就检查一次@和评论（优先处理）
+  reply_order: "oldest"          # 回复顺序：oldest=先回最早的, newest=先回最新的
   # 自动发帖设置
   post_enabled: true             # 是否开启自动发提问帖
   post_interval_hours: 48        # 两条帖子之间最少间隔（小时），支持小数如 0.5

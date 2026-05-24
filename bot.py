@@ -127,6 +127,12 @@ def reply_loop(session, config, prompt, dry_run=False):
         # 3. 获取待回复的帖子
         pending_posts = get_pending_posts()
 
+        # 按配置排序待回复列表
+        reply_order = bot_config.get("reply_order", "oldest")
+        reverse_order = reply_order == "newest"
+        pending_at.sort(key=lambda m: m["timestamp"], reverse=reverse_order)
+        pending_replies.sort(key=lambda m: m["timestamp"], reverse=reverse_order)
+
         total_pending = len(pending_at) + len(pending_replies) + len(pending_posts)
         if total_pending == 0:
             log("[回复] 无待回复内容，等待中...")
