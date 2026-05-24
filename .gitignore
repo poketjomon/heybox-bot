@@ -6,3 +6,4 @@ data/
 .trash/
 logs/
 *__pycache__/
+.notuse/
