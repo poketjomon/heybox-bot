@@ -479,7 +479,7 @@ def do_daily_news(session, config, prompt_path, dry_run=False):
     # 期数 = 已成功发布的新闻数 + 1
     success_count = sum(1 for r in news_records if r.get("status") == "success")
     issue_num = success_count + 1
-    title = f"{now.strftime('%Y年%m月%d日')} {weekday} 每日热点（第{issue_num}期）"
+    title = f"{now.strftime('%m月%d日')} {weekday} 热点追踪（第{issue_num}期）"
 
     # 转换为 HTML 格式
     html_lines = []
