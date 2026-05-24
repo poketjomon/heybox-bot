@@ -1,5 +1,6 @@
 """小黑盒 Bot — 自动抓取 + 自动回复，持续运行"""
 
+import os
 import signal
 import threading
 import time
@@ -241,6 +242,19 @@ def main():
 
     with open(args.config, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+
+    # 如果 cookie/cookie.json 存在，从中读取 cookie 覆盖 config
+    import json
+    cookie_file = os.path.join(os.path.dirname(__file__), "cookie", "cookie.json")
+    if os.path.exists(cookie_file):
+        with open(cookie_file, "r", encoding="utf-8") as f:
+            cookie_list = json.load(f)
+        cookie_dict = {item["name"]: item["value"] for item in cookie_list}
+        config["cookie"] = cookie_dict
+        # 同步 heybox_id
+        if "heybox_id" in cookie_dict:
+            config["heybox_id"] = cookie_dict["heybox_id"]
+        log(f"[配置] 从 cookie/cookie.json 加载 cookie ({len(cookie_dict)} 项)")
 
     prompt_path = config.get("prompt_file", "prompts/warm.md")
     prompt = load_prompt(prompt_path)
