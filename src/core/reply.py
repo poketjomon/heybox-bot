@@ -192,6 +192,7 @@ def reply_to_at(session, config, prompt, msg, dry_run=False):
     append_jsonl(AT_FILE, {
         "message_id": msg["message_id"],
         "link_id": msg["link_id"],
+        "comment_a_id": msg.get("comment_a_id", ""),
         "user_a": msg["user_a"],
         "comment_text": msg["comment_text"],
         "reply": comment,
@@ -372,6 +373,7 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
     append_jsonl(REPLY_FILE, {
         "message_id": msg["message_id"],
         "link_id": msg["link_id"],
+        "comment_a_id": msg.get("comment_a_id", ""),
         "user_a": msg["user_a"],
         "comment_text": msg["comment_text"],
         "my_comment": msg["my_comment"],
