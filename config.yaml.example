@@ -50,6 +50,7 @@ hot_posts:
 # max_comments: 5          # 未使用，每次最多评论几个帖子
 # delay_seconds: 60        # 未使用，每条评论之间的间隔（秒），避免太快被风控
 vision_imgs: 6           # 传给模型看的图片数量（0=不看图）
+vision_detail: "high"    # 图片清晰度：low=低分辨率省token, auto=自动, high=高清
 summary_enabled: true    # 是否开启长文省流功能（false=关闭，直接评论不省流）
 max_content_len: 150     # 开启省流功能后，帖子内容超过此字数时，触发省流功能
 

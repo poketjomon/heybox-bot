@@ -111,9 +111,13 @@ def fetch_post_detail(session, config, link_id):
     if not content:
         content = link.get("description", "")
 
+    # 提取原图（详情 API 返回的 imgs 通常比列表缩略图更清晰）
+    imgs = link.get("imgs", [])
+
     return {
         "title": link.get("title", ""),
         "content": content,
+        "imgs": imgs,
     }
 
 

@@ -84,7 +84,7 @@ def generate_comment(config, prompt, post_content):
     for img_url in imgs[:vision_imgs]:
         img_blocks.append({
             "type": "image_url",
-            "image_url": {"url": img_url},
+            "image_url": {"url": img_url, "detail": config.get("vision_detail", "auto")},
         })
 
     # 按 {{imgs}} 占位符位置插入图片

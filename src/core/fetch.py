@@ -43,6 +43,10 @@ def do_fetch_posts(session, config):
                 detail = fetch_post_detail(session, config, post["link_id"])
                 full_content = detail.get("content", post["description"])
                 full_imgs = detail.get("imgs", post.get("imgs", []))
+                if full_imgs:
+                    log(f"  [图片] 列表: {post.get('imgs', [])[:1]}")
+                    log(f"  [图片] 详情: {detail.get('imgs', [])[:1]}")
+                    log(f"  [图片] 最终: {full_imgs[:1]}")
             except Exception:
                 full_content = post["description"]
                 full_imgs = post.get("imgs", [])
