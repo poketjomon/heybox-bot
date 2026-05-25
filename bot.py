@@ -115,11 +115,15 @@ def reply_loop(session, config, prompt, dry_run=False):
 
         # 2. 获取待回复的"回复我的评论"
         replied_reply_ids = {r["message_id"] for r in read_jsonl(REPLY_FILE) if "message_id" in r}
+        # 已通过@消息回复过的 comment_a_id，避免同一条评论回复两次
+        at_comment_ids = {r["comment_a_id"] for r in read_jsonl(AT_FILE) if "comment_a_id" in r}
+        at_comment_ids.update(m["comment_a_id"] for m in pending_at)
         try:
             reply_messages = fetch_reply_messages(session, config)
             cutoff = (datetime.now() - timedelta(hours=config.get("bot", {}).get("max_age_hours", 24))).timestamp()
             pending_replies = [m for m in reply_messages
                               if m["message_id"] not in replied_reply_ids
+                              and m["comment_a_id"] not in at_comment_ids
                               and m["timestamp"] >= cutoff]
         except Exception:
             pending_replies = []
@@ -203,7 +207,12 @@ def reply_loop(session, config, prompt, dry_run=False):
                 try:
                     new_replies = fetch_reply_messages(session, config)
                     new_reply_ids = {r["message_id"] for r in read_jsonl(REPLY_FILE) if "message_id" in r}
-                    urgent_replies = [m for m in new_replies if m["message_id"] not in new_reply_ids and m["timestamp"] >= cutoff]
+                    urgent_at_comment_ids = {m["comment_a_id"] for m in urgent_at}
+                    urgent_at_comment_ids.update(r["comment_a_id"] for r in read_jsonl(AT_FILE) if "comment_a_id" in r)
+                    urgent_replies = [m for m in new_replies
+                                      if m["message_id"] not in new_reply_ids
+                                      and m["comment_a_id"] not in urgent_at_comment_ids
+                                      and m["timestamp"] >= cutoff]
                 except Exception:
                     urgent_replies = []
 
