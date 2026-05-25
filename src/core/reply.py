@@ -16,7 +16,7 @@ from src.core.utils import (
 def get_pending_posts():
     """获取待回复的帖子（没有 status=success 的）"""
     posts = read_jsonl(POSTS_FILE)
-    return [p for p in posts if p.get("status") != "success"]
+    return [p for p in posts if p.get("status") not in ("success", "deleted")]
 
 
 def reply_to_post(session, config, prompt, post, dry_run=False):
@@ -46,6 +46,13 @@ def reply_to_post(session, config, prompt, post, dry_run=False):
                 log("[回复帖子] 检测到屏蔽词，将重新生成")
                 update_record(POSTS_FILE, link_id, {"pending_comment": None})
                 return "blocked"
+            elif "删除" in msg_text:
+                log(f"[回复帖子] 帖子已删除，跳过: {link_id}")
+                update_record(POSTS_FILE, link_id, {
+                    "status": "deleted",
+                    "pending_comment": None,
+                })
+                return "deleted"
             else:
                 update_record(POSTS_FILE, link_id, {"pending_comment": comment})
                 return "failed"
