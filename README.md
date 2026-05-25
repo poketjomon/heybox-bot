@@ -75,6 +75,7 @@ cp config.yaml.example config.yaml
 
 1. **推荐**：将浏览器导出的 cookie 放到 `cookie/cookie.json`，启动时自动读取
 2. 直接在 `config.yaml` 的 `cookie` 字段填写，在浏览器获取cookie：
+   右键-检查-应用-cookie
 
    ![1779681183297](image/README/1779681183297.png)
 
