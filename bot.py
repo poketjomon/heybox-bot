@@ -20,7 +20,7 @@ from src.core.utils import (
 from src.core.fetch import do_fetch_posts, do_fetch_at, fetch_reply_messages, do_fetch_replies, do_fetch_hot_posts
 from src.core.post import do_auto_post
 from src.core.news import do_daily_news
-from src.core.reply import get_pending_posts, reply_to_post, reply_to_at, reply_to_reply
+from src.core.reply import get_pending_posts, reply_to_post, reply_to_at, reply_to_reply, _record_reply_failure
 
 
 # ─── 抓取循环 ───────────────────────────────────────────────
@@ -66,8 +66,9 @@ def fetch_loop(session, config, prompt_path, dry_run=False):
                 break
 
         # 抓取热门帖子
-        if not is_in_quiet_hours(config, "hot_posts"):
-            do_fetch_hot_posts(session, config)
+        if config.get("bot", {}).get("hot_posts_enabled", True):
+            if not is_in_quiet_hours(config, "hot_posts"):
+                do_fetch_hot_posts(session, config)
             interruptible_sleep(fetch_cooldown)
             if not bot_utils.running:
                 break
@@ -114,7 +115,16 @@ def reply_loop(session, config, prompt, dry_run=False):
             pending_at = []
 
         # 2. 获取待回复的"回复我的评论"
-        replied_reply_ids = {r["message_id"] for r in read_jsonl(REPLY_FILE) if "message_id" in r}
+        max_fails = bot_config.get("max_reply_fail_count", 3)
+        replied_reply_ids = set()
+        exceeded_ids = set()
+        for r in read_jsonl(REPLY_FILE):
+            if "message_id" not in r:
+                continue
+            if r.get("status") in ("success", "dry_run"):
+                replied_reply_ids.add(r["message_id"])
+            elif r.get("fail_count", 0) >= max_fails:
+                exceeded_ids.add(r["message_id"])
         # 已通过@消息回复过的 comment_a_id，避免同一条评论回复两次
         at_comment_ids = {r["comment_a_id"] for r in read_jsonl(AT_FILE) if "comment_a_id" in r}
         at_comment_ids.update(m["comment_a_id"] for m in pending_at)
@@ -123,6 +133,7 @@ def reply_loop(session, config, prompt, dry_run=False):
             cutoff = (datetime.now() - timedelta(hours=config.get("bot", {}).get("max_age_hours", 24))).timestamp()
             pending_replies = [m for m in reply_messages
                               if m["message_id"] not in replied_reply_ids
+                              and m["message_id"] not in exceeded_ids
                               and m["comment_a_id"] not in at_comment_ids
                               and m["timestamp"] >= cutoff]
         except Exception:
@@ -181,6 +192,7 @@ def reply_loop(session, config, prompt, dry_run=False):
                 replied_count += 1
             except Exception as e:
                 log(f"[回复评论] 出错: {e}")
+                _record_reply_failure(msg)
             log(f"[冷却] 等待 {cooldown} 秒...")
             interruptible_sleep(cooldown)
 
@@ -235,6 +247,7 @@ def reply_loop(session, config, prompt, dry_run=False):
                             replied_count += 1
                         except Exception as e:
                             log(f"[回复评论] 出错: {e}")
+                            _record_reply_failure(msg)
                         interruptible_sleep(cooldown)
 
             try:

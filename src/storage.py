@@ -47,6 +47,24 @@ def update_record(path, link_id, updates):
     write_jsonl(path, records)
 
 
+def update_record_by(path, field, value, updates):
+    """更新指定字段匹配的记录，合并 updates 字段。返回是否找到并更新"""
+    records = read_jsonl(path)
+    found = False
+    for r in records:
+        if r.get(field) == value:
+            for k, v in updates.items():
+                if v is None:
+                    r.pop(k, None)
+                else:
+                    r[k] = v
+            found = True
+            break
+    if found:
+        write_jsonl(path, records)
+    return found
+
+
 def get_existing_ids(path):
     """获取 JSONL 文件中所有 link_id 的集合"""
     records = read_jsonl(path)

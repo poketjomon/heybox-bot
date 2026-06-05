@@ -44,6 +44,8 @@ def llm_chat(client, model, messages, max_tokens=200, temperature=0.8):
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+            if isinstance(response, str):
+                raise RuntimeError(f"API 返回了非标准响应: {response[:200]}")
             return response
         except Exception as e:
             if attempt < max_retries - 1:

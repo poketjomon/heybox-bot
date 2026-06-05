@@ -5,7 +5,7 @@ import os
 from src.commenter import post_comment, post_comment_reply
 from src.llm import generate_comment, llm_chat
 from src.scraper import fetch_post_detail
-from src.storage import read_jsonl, append_jsonl, update_record, now_iso
+from src.storage import read_jsonl, append_jsonl, update_record, update_record_by, now_iso
 
 from src.core.utils import (
     POSTS_FILE, AT_FILE, REPLY_FILE, ROLE_SWITCH_FILE,
@@ -17,6 +17,32 @@ def get_pending_posts():
     """获取待回复的帖子（没有 status=success 的）"""
     posts = read_jsonl(POSTS_FILE)
     return [p for p in posts if p.get("status") not in ("success", "deleted")]
+
+
+def _record_reply_failure(msg):
+    """记录回复评论失败，递增 fail_count"""
+    mid = msg["message_id"]
+    # 查找已有的失败记录，获取当前 fail_count
+    existing_fail = None
+    for r in read_jsonl(REPLY_FILE):
+        if r.get("message_id") == mid and r.get("status") == "failed":
+            if existing_fail is None or r.get("fail_count", 0) > existing_fail.get("fail_count", 0):
+                existing_fail = r
+    if existing_fail:
+        new_count = existing_fail.get("fail_count", 0) + 1
+        update_record_by(REPLY_FILE, "message_id", mid, {"fail_count": new_count, "failed_at": now_iso()})
+        log(f"[回复评论] 失败次数: {new_count}")
+    else:
+        append_jsonl(REPLY_FILE, {
+            "message_id": mid,
+            "link_id": msg["link_id"],
+            "user_a": msg["user_a"],
+            "comment_text": msg["comment_text"],
+            "status": "failed",
+            "fail_count": 1,
+            "failed_at": now_iso(),
+        })
+        log("[回复评论] 失败次数: 1")
 
 
 def reply_to_post(session, config, prompt, post, dry_run=False):
@@ -368,7 +394,8 @@ def reply_to_reply(session, config, prompt, msg, dry_run=False):
             log(f"[回复评论] 发送失败: {msg_text}")
             if "频次" in msg_text or "频率" in msg_text:
                 trigger_rate_limit(config)
-            return  # 发送失败不标记，下次重试
+            _record_reply_failure(msg)
+            return
 
     append_jsonl(REPLY_FILE, {
         "message_id": msg["message_id"],
